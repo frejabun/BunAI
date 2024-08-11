@@ -1,8 +1,6 @@
 import streamlit as st
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from huggingface_hub import hf_hub_download
-import time
-import shutil
+import os
 
 model_list = [
     ("microsoft/Phi-3-mini-128k-instruct", "A small language model for experimentation"),
@@ -13,32 +11,31 @@ custom_model_dir = "../BunAI/Models"
 
 st.title("Model Selector")
 
-selected_model = st.selectbox("Select a model", [model[0] for model in model_list])
-selected_model_index = model_list.index(selected_model)
-model_description = model_list[selected_model_index][1]
-st.write(f"Model Description: {model_description}")
+# Get list of model names for the dropdown
+model_names = [model[0] for model in model_list]
 
-model_path = None
+selected_model = st.selectbox("Select a model", model_names)
 
-if st.button("Download Model"):
-    progress_bar = st.progress(0)
-    try:
-        temp_model_path = hf_hub_download(repo_id=selected_model, filename="pytorch_model.bin")
-        for i in range(100):
-            time.sleep(0.01)  # Replace with actual download progress tracking
-            progress_bar.progress(i + 1)
+# Find the selected model's description
+model_description = None
+for model_name, description in model_list:
+    if selected_model == model_name:
+        model_description = description
+        break
 
-        # Create the custom directory if it doesn't exist
-        import os
-        os.makedirs(custom_model_dir, exist_ok=True)
+if model_description:
+    st.write(f"Model Description: {model_description}")
 
-        # Move the downloaded model to the custom directory
-        shutil.move(temp_model_path, os.path.join(custom_model_dir, selected_model))
-        model_path = os.path.join(custom_model_dir, selected_model)
-    except Exception as e:
-        st.error(f"Download failed: {e}")
-        model_path = None
+    model_save_path = os.path.join(custom_model_dir, selected_model.replace("/", "_"))
+    if not os.path.exists(model_save_path):
+        os.makedirs(model_save_path, exist_ok=True)
+        model = AutoModelForCausalLM.from_pretrained(selected_model, cache_dir=model_save_path)
+        model.save_pretrained(model_save_path)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(model_save_path)
 
-if model_path:
-    model = AutoModelForCausalLM.from_pretrained(model_path)
     # ... rest of your code to use the model
+else:
+    st.error(f"Invalid model selection: {selected_model}")
+
+
